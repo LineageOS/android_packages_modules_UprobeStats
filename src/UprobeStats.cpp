@@ -188,34 +188,9 @@ void doPoll(PollArgs args) {
         AStatsEvent_write(event);
         AStatsEvent_release(event);
       }
-    } else if (mapPath.find(kMalwareSignalMap) != std::string::npos) {
-      auto result =
-          bpf::pollRingBuf<bpf::MalwareSignal>(mapPath.c_str(), timeoutMs);
-      for (auto value : result) {
-        if (value.component_enabled_setting.initialized == true) {
-          LOG_IF_DEBUG(
-              "ComponentEnabledSetting: package_name="
-              << value.component_enabled_setting.package_name
-              << " class_name=" << value.component_enabled_setting.class_name
-              << " new_state=" << value.component_enabled_setting.new_state
-              << " calling_package_name="
-              << value.component_enabled_setting.calling_package_name);
-        }
-        if (value.wm_bound_uid.initialized == true) {
-          LOG_IF_DEBUG(
-              "WmBoundUid: clientUid:" << value.wm_bound_uid.client_uid);
-          LOG_IF_DEBUG(
-              "clientPackageName:" << value.wm_bound_uid.client_package_name);
-          LOG_IF_DEBUG("bindFlags:" << value.wm_bound_uid.bind_flags);
-        }
-      }
     } else {
-      LOG_IF_DEBUG("Polling for i64 result");
-      auto result = bpf::pollRingBuf<uint64_t>(mapPath.c_str(), timeoutMs);
-      for (auto value : result) {
-        LOG_IF_DEBUG("Other result... value: " << value
-                                               << " mapPath: " << mapPath);
-      }
+      LOG(ERROR) << "unsupported mapPath: " << mapPath;
+      break;
     }
     now = std::chrono::steady_clock::now();
   }

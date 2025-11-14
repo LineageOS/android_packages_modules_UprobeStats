@@ -3,11 +3,20 @@ package {
     default_team: "trendy_team_system_performance",
 }
 
+filegroup {
+    name: "uprobestats-test-sources",
+    srcs: ["*.java"],
+    exclude_srcs: select(release_flag("RELEASE_UPROBESTATS_RUST"), {
+        true: [],
+        false: [
+            "SmokeTestRustOnly.java",
+        ],
+    }),
+}
+
 java_test_host {
     name: "uprobestats-test",
-    srcs: [
-        "*.java",
-    ],
+    srcs: [":uprobestats-test-sources"],
     java_resources: ["test/*.textproto"],
     libs: [
         "compatibility-host-util",
@@ -25,6 +34,7 @@ java_test_host {
         "perfetto_config-full",
         "art_flags_uprobestats_java_lib",
         "uprobestats_flags_java_lib",
+        "uprobestats_mainline_flags_java_lib",
         "uprobestats-protos",
     ],
     proto: {
@@ -33,6 +43,10 @@ java_test_host {
     test_suites: [
         "general-tests",
         "mts-uprobestats",
+    ],
+    device_common_data: [
+        ":DisruptiveTestApp",
+        ":BitmapTestApp",
     ],
 }
 

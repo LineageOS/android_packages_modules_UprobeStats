@@ -26,7 +26,7 @@ bpf {
 }
 
 bpf {
-    name: "MalwareSignal.o",
-    srcs: ["MalwareSignal.c"],
+    name: "DisruptiveApp.o",
+    srcs: ["DisruptiveApp.c"],
     sub_dir: "uprobestats",
 }

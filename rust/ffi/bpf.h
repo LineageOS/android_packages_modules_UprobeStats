@@ -46,12 +46,13 @@ struct UpdateDeviceIdleTempAllowlistRecord {
   int calling_uid;
 };
 
-#pragma pack(push, 1) // Pack structs with 1-byte boundary
-struct WmBoundUid {
-  __u64 client_uid;
-  char client_package_name[64];
-  unsigned long bind_flags;
-  bool initialized;
+struct BindServiceLocked {
+  char intent_action[64];
+  char intent_package[64];
+  char intent_component_name_package[64];
+  char intent_component_name_class[64];
+  long bind_flags;
+  char calling_package[64];
 };
 
 struct ComponentEnabledSetting {
@@ -59,14 +60,19 @@ struct ComponentEnabledSetting {
   char class_name[64];
   int new_state;
   char calling_package_name[64];
-  bool initialized;
 };
 
-struct MalwareSignal {
-  struct WmBoundUid wm_bound_uid;
-  struct ComponentEnabledSetting component_enabled_setting;
+struct ProcessChange {
+  int pid;
+  int uid;
+  char process_name[256];
 };
-#pragma pack(pop)
+
+struct BitmapAllocation {
+  __u32 width;
+  __u32 height;
+  __u32 pixel_storage_type;
+};
 
 int pollRingBuf(const char *mapPath, int timeoutMs, size_t valueSize,
                 void (*callback)(const void *, void *), void *cookie);

@@ -42,10 +42,16 @@ apex {
     }),
 
     name: "com.android.uprobestats",
-    binaries: [
-        "uprobestats",
-        "uprobestatsbpfload",
-    ],
+    binaries: select(release_flag("RELEASE_UPROBESTATS_RUST"), {
+        true: [
+            "uprobestats_rs",
+            "uprobestatsbpfload",
+        ],
+        false: [
+            "uprobestats",
+            "uprobestatsbpfload",
+        ],
+    }),
 
     prebuilts: [
         "com.android.uprobestats.init.rc",
@@ -55,7 +61,7 @@ apex {
         "BitmapAllocation.o",
         "GenericInstrumentation.o",
         "ProcessManagement.o",
-        "MalwareSignal.o",
+        "DisruptiveApp.o",
     ],
 
     native_shared_libs: [
@@ -66,4 +72,8 @@ apex {
     key: "com.android.uprobestats.key",
     certificate: ":com.android.uprobestats.certificate",
     defaults: ["b-launched-apex-module"],
+    licenses: [
+        "Android-Apache-2.0",
+        "opensourcerequest",
+    ],
 }

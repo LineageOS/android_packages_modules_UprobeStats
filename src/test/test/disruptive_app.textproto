@@ -1,0 +1,37 @@
+# proto-file: config.proto
+# proto-message: UprobestatsConfig
+
+tasks {
+    probe_configs {
+        bpf_name: "prog_DisruptiveApp_uprobe_set_component_enabled_setting"
+        fully_qualified_class_name: "com.android.server.pm.PackageManagerService$IPackageManagerImpl"
+        method_name: "setComponentEnabledSetting"
+        fully_qualified_parameters: ["android.content.ComponentName", "int", "int", "int", "java.lang.String"]
+    }
+    probe_configs {
+        bpf_name: "prog_DisruptiveApp_uprobe_bind_service_locked"
+        fully_qualified_class_name: "com.android.server.am.ActiveServices"
+        method_name: "bindServiceLocked"
+        fully_qualified_parameters: [
+            "android.app.IApplicationThread",
+            "android.os.IBinder",
+            "android.content.Intent",
+            "java.lang.String",
+            "android.app.IServiceConnection",
+            "long",
+            "java.lang.String",
+            "boolean",
+            "int",
+            "java.lang.String",
+            "android.app.IApplicationThread",
+            "java.lang.String",
+            "int"
+        ],
+    }
+    bpf_maps: [
+        "map_DisruptiveApp_ComponentEnabledSetting_output_buf",
+        "map_DisruptiveApp_BindServiceLocked_output_buf"
+    ]
+    target_process_name: "system_server"
+    duration_seconds: 60
+}

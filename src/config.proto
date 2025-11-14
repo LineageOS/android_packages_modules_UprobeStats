@@ -77,6 +77,15 @@ message UprobestatsConfig {
     }
     optional StatsdLoggingConfig statsd_logging_config = 5;
 
+    enum TargetProcessSelection {
+      UNKNOWN = 0;
+      SPECIFIC_PROCESS_NAME = 1;
+      ANY_APP_PROCESS_ON_START = 2;
+      SPECIFIC_APP_PROCESS_ON_START = 3;
+    };
+
+    optional TargetProcessSelection target_process_selection = 6;
+
   }
 
   repeated Task tasks = 1;

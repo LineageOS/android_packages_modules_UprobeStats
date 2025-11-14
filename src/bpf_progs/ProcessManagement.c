@@ -85,10 +85,10 @@ void recordString(void *jstring, unsigned int max_length, char *dest) {
   // byte offset 12-15: hash_code
   // byte offset 16 and beyond: string content
   __u32 count;
-  bpf_probe_read_user(&count, sizeof(count), jstring + 8);
+  bpf_probe_read_user(&count, sizeof(count), (uint8_t *)jstring + 8);
   count /= 2;
   bpf_probe_read_user_str(dest, max_length < count + 1 ? max_length : count + 1,
-                          jstring + 16);
+                          (uint8_t *)jstring + 16);
 }
 
 // Copies the content of a Java String object to <dest>, where the Java String
@@ -135,6 +135,69 @@ DEFINE_BPF_PROG("uprobe/update_device_idle_temp_allowlist", AID_UPROBESTATS,
   bpf_probe_read_user(&output->calling_uid, 4, (void *)ctx->sp + 44);
 
   bpf_update_device_idle_temp_allowlist_records_submit(output);
+  return 0;
+}
+
+struct ProcessChange {
+  int pid;
+  int uid;
+  char process_name[256];
+};
+
+DEFINE_BPF_RINGBUF_EXT(process_change_output_buf, struct ProcessChange,
+                       4096 * 16, AID_UPROBESTATS, AID_UPROBESTATS, 0600, "",
+                       "", PRIVATE, BPFLOADER_MIN_VER, BPFLOADER_MAX_VER,
+                       LOAD_ON_ENG, LOAD_ON_USER, LOAD_ON_USERDEBUG);
+
+DEFINE_BPF_PROG("uprobe/set_pid", AID_UPROBESTATS, AID_UPROBESTATS, BPF_KPROBE5)
+(struct pt_regs *ctx) {
+  struct ProcessChange *output = bpf_process_change_output_buf_reserve();
+  if (output == NULL)
+    return 1;
+
+  output->pid = (int)ctx->regs[2];
+  bpf_probe_read_user(&output->uid, 4, (void *)(ctx->regs[1] + 0xf4));
+  void *process_name = 0;
+  bpf_probe_read_user(&process_name, 4, (void *)(ctx->regs[1] + 0xa0));
+  recordString(process_name, 256, output->process_name);
+
+  bpf_process_change_output_buf_submit(output);
+  return 0;
+}
+
+DEFINE_BPF_PROG("uprobe/make_active", AID_UPROBESTATS, AID_UPROBESTATS,
+                BPF_KPROBE4)
+(struct pt_regs *ctx) {
+  struct ProcessChange *output = bpf_process_change_output_buf_reserve();
+  if (output == NULL)
+    return 1;
+
+  bpf_probe_read_user(&output->pid, 4, (void *)(ctx->regs[1] + 0xe8));
+  bpf_probe_read_user(&output->uid, 4, (void *)(ctx->regs[1] + 0xf4));
+  uint8_t *process_name = 0;
+  bpf_probe_read_user(&process_name, 4, (void *)(ctx->regs[1] + 0xa0));
+  recordString(process_name, 256, output->process_name);
+
+  bpf_process_change_output_buf_submit(output);
+  return 0;
+}
+
+DEFINE_BPF_PROG("uprobe/on_process_active", AID_UPROBESTATS, AID_UPROBESTATS,
+                BPF_KPROBE6)
+(struct pt_regs *ctx) {
+  struct ProcessChange *output = bpf_process_change_output_buf_reserve();
+  if (output == NULL)
+    return 1;
+
+  uint8_t *process_record_ptr = 0;
+  bpf_probe_read_user(&process_record_ptr, 4, (void *)(ctx->regs[1] + 0x8));
+  bpf_probe_read_user(&output->pid, 4, (void *)(process_record_ptr + 0xe8));
+  bpf_probe_read_user(&output->uid, 4, (void *)(process_record_ptr + 0xf4));
+  uint8_t *process_name = 0;
+  bpf_probe_read_user(&process_name, 4, (void *)(process_record_ptr + 0xa0));
+  recordString(process_name, 256, output->process_name);
+
+  bpf_process_change_output_buf_submit(output);
   return 0;
 }
 

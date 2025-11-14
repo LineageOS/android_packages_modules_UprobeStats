@@ -40,12 +40,14 @@ cc_aconfig_library {
 java_aconfig_library {
     name: "uprobestats_flags_java_lib",
     aconfig_declarations: "uprobestats_flags",
+    sdk_version: "current",
     host_supported: true,
 }
 
 java_aconfig_library {
     name: "art_flags_uprobestats_java_lib",
     aconfig_declarations: "art-aconfig-flags",
+    sdk_version: "current",
     host_supported: true,
 }
 
@@ -55,6 +57,7 @@ java_aconfig_library {
     host_supported: true,
     visibility: [
         "//cts/hostsidetests/statsdatom:__subpackages__",
+        "//packages/modules/UprobeStats:__subpackages__",
     ],
 }
 
@@ -127,7 +130,10 @@ uprobestats_cc_library {
 
 cc_binary {
     name: "uprobestats",
-    enabled: true,
+    enabled: select(release_flag("RELEASE_UPROBESTATS_RUST"), {
+        true: false,
+        false: true,
+    }),
     srcs: [
         "UprobeStats.cpp",
         "config.proto",
@@ -155,7 +161,6 @@ cc_binary {
             "BitmapAllocation.o",
             "GenericInstrumentation.o",
             "ProcessManagement.o",
-            "MalwareSignal.o",
         ],
     }),
 

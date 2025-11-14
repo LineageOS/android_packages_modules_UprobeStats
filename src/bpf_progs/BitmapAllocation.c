@@ -19,6 +19,20 @@
 #include <stdint.h>
 #include <bpf_helpers.h>
 
+// TODO: import this struct from generic header, access registers via generic
+// function
+struct pt_regs {
+  unsigned long regs[31];
+  unsigned long sp;
+  unsigned long pc;
+  unsigned long pr;
+  unsigned long sr;
+  unsigned long gbr;
+  unsigned long mach;
+  unsigned long macl;
+  long tra;
+};
+
 DEFINE_BPF_RINGBUF_EXT(output_buf, __u64, 4096, AID_UPROBESTATS, AID_UPROBESTATS, 0600, "", "",
                        PRIVATE, BPFLOADER_MIN_VER, BPFLOADER_MAX_VER, LOAD_ON_ENG, LOAD_ON_USER,
                        LOAD_ON_USERDEBUG);
@@ -30,6 +44,45 @@ DEFINE_BPF_PROG("uprobe/bitmap_constructor_heap", AID_UPROBESTATS, AID_UPROBESTA
     (*output) = 123;
     bpf_output_buf_submit(output);
     return 0;
+}
+
+struct BitmapAllocation {
+  __u32 width;
+  __u32 height;
+  __u32 pixel_storage_type;
+};
+
+int load(void *dest, int offset, int length, void *user_space_address) {
+  long canonical_address = (long)user_space_address & 0x00FFFFFFFFFFFFFF;
+  return bpf_probe_read_user(dest, length,
+                             (void *)(canonical_address + offset));
+}
+
+DEFINE_BPF_RINGBUF_EXT(output, struct BitmapAllocation, 16 * 1024,
+                       AID_UPROBESTATS, AID_UPROBESTATS, 0600, "", "", PRIVATE,
+                       BPFLOADER_MIN_VER, BPFLOADER_MAX_VER, LOAD_ON_ENG,
+                       LOAD_ON_USER, LOAD_ON_USERDEBUG);
+
+DEFINE_BPF_PROG("uprobe/bitmap_creation", AID_UPROBESTATS, AID_UPROBESTATS,
+                BPF_KPROBE3)
+(struct pt_regs *ctx) {
+
+  struct BitmapAllocation *output = bpf_output_reserve();
+  if (output == NULL)
+    return 1;
+  output->width = ctx->regs[4];
+  output->height = ctx->regs[5];
+
+  uint8_t *bitmap_wrapper_ptr = (uint8_t *)(ctx->regs[3]);
+  uint8_t *bitmap_ptr;
+  // The first 8 bytes of a BitmapWrapper object is the pointer to the
+  // underlying Bitmap.
+  load(&bitmap_ptr, 0, 8, bitmap_wrapper_ptr);
+  // 0x78 is the offset of pixel_storage_type into a Bitmap object.
+  load(&output->pixel_storage_type, 0x78, 4, bitmap_ptr);
+
+  bpf_output_submit(output);
+  return 0;
 }
 
 LICENSE("GPL");

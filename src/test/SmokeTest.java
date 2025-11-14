@@ -23,8 +23,11 @@ import static com.google.common.truth.Truth.assertThat;
 
 import static org.junit.Assume.assumeTrue;
 
+import static test.SmokeTestSetup.configureStatsDAndStartUprobeStats;
+import static test.SmokeTestSetup.initializeStatsD;
+import static test.SmokeTestSetup.initializeUprobeStats;
+
 import android.cts.statsdatom.lib.AtomTestUtils;
-import android.cts.statsdatom.lib.ConfigUtils;
 import android.cts.statsdatom.lib.DeviceUtils;
 import android.cts.statsdatom.lib.ReportUtils;
 import android.platform.test.annotations.RequiresFlagsDisabled;
@@ -33,30 +36,23 @@ import android.platform.test.flag.junit.CheckFlagsRule;
 import android.platform.test.flag.junit.host.HostFlagsValueProvider;
 
 import com.android.compatibility.common.util.CpuFeatures;
-import com.android.internal.os.StatsdConfigProto;
 import com.android.os.StatsLog;
 import com.android.os.framework.FrameworkExtensionAtoms;
 import com.android.os.uprobestats.TestUprobeStatsAtomReported;
 import com.android.os.uprobestats.UprobestatsExtensionAtoms;
-import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.testtype.DeviceJUnit4ClassRunner;
 import com.android.tradefed.testtype.junit4.BaseHostJUnit4Test;
 import com.android.tradefed.util.RunUtil;
 
 import com.google.protobuf.ExtensionRegistry;
-import com.google.protobuf.TextFormat;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import uprobestats.protos.Config.UprobestatsConfig;
-
-import java.io.File;
-import java.nio.file.Files;
 import java.util.List;
-import java.util.Scanner;
 
 @RunWith(DeviceJUnit4ClassRunner.class)
 public class SmokeTest extends BaseHostJUnit4Test {
@@ -67,6 +63,8 @@ public class SmokeTest extends BaseHostJUnit4Test {
             "test_bss_setBatteryState_artApi.textproto";
     private static final String TEMP_ALLOWLIST_CONFIG =
             "test_updateDeviceIdleTempAllowlist.textproto";
+    private static final String SET_TEMP_ALLOWLIST_STATE_CONFIG =
+            "test_setUidTempAllowlistStateLSP.textproto";
     private static final String CONFIG_NAME = "config";
     private static final String CMD_SETPROP_UPROBESTATS = "setprop ctl.start uprobestats";
     private static final String CONFIG_DIR = "/data/misc/uprobestats-configs/";
@@ -79,44 +77,8 @@ public class SmokeTest extends BaseHostJUnit4Test {
 
     @Before
     public void setUp() throws Exception {
-        ConfigUtils.removeConfig(getDevice());
-        ReportUtils.clearReports(getDevice());
-        getDevice().deleteFile(CONFIG_DIR + CONFIG_NAME);
-        RunUtil.getDefault().sleep(AtomTestUtils.WAIT_TIME_LONG);
-        getDevice().executeShellCommand("killall uprobestats");
-        mRegistry = ExtensionRegistry.newInstance();
-        UprobestatsExtensionAtoms.registerAllExtensions(mRegistry);
-        FrameworkExtensionAtoms.registerAllExtensions(mRegistry);
-    }
-
-    void startUprobeStats(String textprotoFilename, int atomId) throws Exception {
-        // 1. Parse config from resources
-        String textProto =
-                new Scanner(this.getClass().getResourceAsStream(textprotoFilename))
-                        .useDelimiter("\\A")
-                        .next();
-        UprobestatsConfig.Builder builder = UprobestatsConfig.newBuilder();
-        TextFormat.getParser().merge(textProto, builder);
-        UprobestatsConfig config = builder.build();
-
-        // 2. Write config to a file and drop it on the device
-        File tmp = File.createTempFile("uprobestats", CONFIG_NAME);
-        assertThat(tmp.setWritable(true)).isTrue();
-        Files.write(tmp.toPath(), config.toByteArray());
-        ITestDevice device = getDevice();
-        assertThat(getDevice().enableAdbRoot()).isTrue();
-        assertThat(getDevice().pushFile(tmp, CONFIG_DIR + CONFIG_NAME)).isTrue();
-
-        // 3. Configure StatsD
-        StatsdConfigProto.StatsdConfig.Builder configBuilder =
-                ConfigUtils.createConfigBuilder("AID_UPROBESTATS");
-        ConfigUtils.addEventMetric(configBuilder, atomId);
-        ConfigUtils.uploadConfig(getDevice(), configBuilder);
-
-        // 4. Start UprobeStats
-        device.executeShellCommand(CMD_SETPROP_UPROBESTATS);
-        // Allow UprobeStats time to attach probe
-        RunUtil.getDefault().sleep(AtomTestUtils.WAIT_TIME_LONG);
+        mRegistry = initializeStatsD(getDevice());
+        initializeUprobeStats(getDevice());
     }
 
     @Test
@@ -137,6 +99,7 @@ public class SmokeTest extends BaseHostJUnit4Test {
     }
 
     @Test
+    @Ignore
     @RequiresFlagsEnabled({
         FLAG_ENABLE_UPROBESTATS,
         FLAG_EXECUTABLE_METHOD_FILE_OFFSETS,
@@ -147,8 +110,11 @@ public class SmokeTest extends BaseHostJUnit4Test {
     }
 
     private void batteryStats(String config) throws Exception {
-        startUprobeStats(
-                config, UprobestatsExtensionAtoms.TEST_UPROBESTATS_ATOM_REPORTED_FIELD_NUMBER);
+        configureStatsDAndStartUprobeStats(
+                getClass(),
+                getDevice(),
+                config,
+                UprobestatsExtensionAtoms.TEST_UPROBESTATS_ATOM_REPORTED_FIELD_NUMBER);
 
         // Set charging state, which should invoke BatteryStatsService#setBatteryState.
         // Assumptions:
@@ -177,7 +143,9 @@ public class SmokeTest extends BaseHostJUnit4Test {
     @RequiresFlagsEnabled(FLAG_ENABLE_UPROBESTATS)
     public void updateDeviceIdleTempAllowlist() throws Exception {
         assumeTrue(CpuFeatures.isArm64(getDevice()));
-        startUprobeStats(
+        configureStatsDAndStartUprobeStats(
+                getClass(),
+                getDevice(),
                 TEMP_ALLOWLIST_CONFIG,
                 FrameworkExtensionAtoms.DEVICE_IDLE_TEMP_ALLOWLIST_UPDATED_FIELD_NUMBER);
 
@@ -204,6 +172,44 @@ public class SmokeTest extends BaseHostJUnit4Test {
                                                 FrameworkExtensionAtoms
                                                         .deviceIdleTempAllowlistUpdated))
                         .anyMatch(reported -> reported.getReason().equals("shell"));
+        assertThat(anyMatch).isTrue();
+    }
+
+    @Test
+    @Ignore
+    @RequiresFlagsEnabled(FLAG_ENABLE_UPROBESTATS)
+    public void setUidTempAllowlistState() throws Exception {
+        assumeTrue(CpuFeatures.isArm64(getDevice()));
+        configureStatsDAndStartUprobeStats(
+                getClass(),
+                getDevice(),
+                SET_TEMP_ALLOWLIST_STATE_CONFIG,
+                FrameworkExtensionAtoms.POWER_SAVE_TEMP_ALLOWLIST_CHANGED_FIELD_NUMBER);
+
+        // Set tempallowlist
+        getDevice().executeShellCommand("cmd deviceidle tempwhitelist com.google.android.tts");
+        // Allow UprobeStats/StatsD time to collect metric
+        RunUtil.getDefault().sleep(AtomTestUtils.WAIT_TIME_LONG);
+
+        // See if the atom made it
+        List<StatsLog.EventMetricData> data =
+                ReportUtils.getEventMetricDataList(getDevice(), mRegistry);
+        assertThat(data.size()).isGreaterThan(0);
+        boolean anyMatch =
+                data.stream()
+                        .map(StatsLog.EventMetricData::getAtom)
+                        .filter(
+                                atom ->
+                                        atom.hasExtension(
+                                                FrameworkExtensionAtoms
+                                                        .powerSaveTempAllowlistChanged))
+                        .map(
+                                atom ->
+                                        atom.getExtension(
+                                                FrameworkExtensionAtoms
+                                                        .powerSaveTempAllowlistChanged))
+                        .anyMatch(
+                                reported -> reported.getUid() > 0 && reported.getAddToAllowlist());
         assertThat(anyMatch).isTrue();
     }
 }

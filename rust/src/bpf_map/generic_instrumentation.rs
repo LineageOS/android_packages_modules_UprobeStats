@@ -1,20 +1,20 @@
 use super::{OnItem, JAVA_ARGUMENT_REGISTER_OFFSET};
+use crate::config_resolver::ResolvedTask;
 use anyhow::{anyhow, Result};
 use log::debug;
 use protobuf::MessageField;
 use statssocket::AStatsEvent;
 use uprobestats_bpf_bindgen::{CallResult, CallTimestamp};
-use uprobestats_proto::config::uprobestats_config::Task;
 
 // SAFETY: `CallTimestamp` is a struct defined in the given `MAP_PATH`, and is guaranteed to match the
 // layout of the corresponding C struct.
 unsafe impl OnItem for CallTimestamp {
     const MAP_PATH: &'static str =
         "/sys/fs/bpf/uprobestats/map_GenericInstrumentation_call_timestamp_buf";
-    fn on_item(&self, task: &Task) -> Result<()> {
+    fn on_item(&self, task: &ResolvedTask) -> Result<()> {
         debug!("CallTimestamp - event: {}, timestamp_ns: {}", self.event, self.timestampNs,);
 
-        let MessageField(Some(ref statsd_logging_config)) = task.statsd_logging_config else {
+        let MessageField(Some(ref statsd_logging_config)) = task.task.statsd_logging_config else {
             return Ok(());
         };
 
@@ -38,13 +38,13 @@ unsafe impl OnItem for CallTimestamp {
 unsafe impl OnItem for CallResult {
     const MAP_PATH: &'static str =
         "/sys/fs/bpf/uprobestats/map_GenericInstrumentation_call_detail_buf";
-    fn on_item(&self, task: &Task) -> Result<()> {
+    fn on_item(&self, task: &ResolvedTask) -> Result<()> {
         debug!("CallResult - register: pc = {}", self.pc,);
         for i in 0..10 {
             debug!("CallResult - register: {} = {}", i, self.regs[i],);
         }
 
-        let MessageField(Some(ref statsd_logging_config)) = task.statsd_logging_config else {
+        let MessageField(Some(ref statsd_logging_config)) = task.task.statsd_logging_config else {
             return Ok(());
         };
 
