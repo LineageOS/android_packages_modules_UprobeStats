@@ -14,7 +14,8 @@
         package="com.android.uprobestats.disruptive">
     <uses-permission android:name="android.permission.START_ACTIVITIES_FROM_BACKGROUND" />
     <application>
-        <activity android:name=".TestActivity" android:exported="true">
+        <activity android:name=".TestActivity" android:exported="true" />
+        <activity android:name=".TestLauncherActivity" android:exported="true">
             <intent-filter>
                 <category android:name="android.intent.category.LAUNCHER"/>
                 <action android:name="android.intent.action.MAIN"/>

@@ -12,7 +12,7 @@ tasks {
     }
     bpf_maps: "map_ProcessManagement_update_device_idle_temp_allowlist_records"
     target_process_name: "system_server"
-    duration_seconds: 180
+    duration_seconds: 60
     statsd_logging_config {
       atom_id: 940
     }

@@ -9,7 +9,7 @@ pub(crate) fn get_method_offset_from_oatdump(
     method_signature: &str,
 ) -> Result<Option<i32>> {
     let output = Command::new("oatdump")
-        .arg(format!("--oat-file={}", oat_file))
+        .arg(format!("--oat-file={oat_file}"))
         .arg("--dump-method-and-offset-as-json")
         .stdout(Stdio::piped())
         .spawn()

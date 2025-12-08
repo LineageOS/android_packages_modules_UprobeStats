@@ -1,5 +1,6 @@
 //! UProbestats executable.
 use anyhow::{anyhow, bail, ensure, Result};
+use atrace::{atrace_begin, atrace_end, AtraceTag};
 use binder::ProcessState;
 use log::{debug, error, LevelFilter};
 use rustutils::system_properties;
@@ -11,9 +12,10 @@ use std::{
     time::Duration,
 };
 use uprobestats_bpf::bpf_perf_event_open;
-use uprobestats_rs::{bpf_map, config_resolver, guardrail};
+use uprobestats_rs::{bpf_map, config_resolver, guardrail, is_user_build};
 
 fn main() {
+    atrace_begin(AtraceTag::App, "uprobestats_rs::main");
     let log_tag_filter = level_filter_from_property_or_info("log.tag.uprobestats");
     let persist_log_tag_filter = level_filter_from_property_or_info("persist.log.tag.uprobestats");
     let log_level_filter = max(log_tag_filter, persist_log_tag_filter);
@@ -23,9 +25,12 @@ fn main() {
     ));
 
     if let Err(e) = main_impl() {
-        error!("{}", e);
+        error!("{e}");
+        atrace_end(AtraceTag::App);
         exit(1);
     };
+
+    atrace_end(AtraceTag::App);
 }
 
 fn main_impl() -> Result<()> {
@@ -51,7 +56,8 @@ fn main_impl() -> Result<()> {
 
     let task = config_resolver::resolve_single_task(config)?;
 
-    let probes = config_resolver::resolve_probes(&task)?;
+    // binder_interface_bpf_map will clear the contents of the map when it goes out of scope.
+    let (probes, _binder_interface_bpf_map) = config_resolver::resolve_probes(&task)?;
     for probe in &probes {
         debug!(
             "attaching bpf {} to {} at {}",
@@ -75,7 +81,7 @@ fn main_impl() -> Result<()> {
         for map_path in &task.bpf_map_paths {
             let task_ref = &task;
             handles.push(s.spawn(move || {
-                debug!("Spawned thread for map_path: {}", map_path);
+                debug!("Spawned thread for map_path: {map_path}");
                 bpf_map::poll_registry(map_path, task_ref, duration)
                     .map_err(|e| anyhow!("poll_registry error: {}", e))
             }));
@@ -96,13 +102,6 @@ fn main_impl() -> Result<()> {
     debug!("done");
 
     Ok(())
-}
-
-fn is_user_build() -> bool {
-    if let Ok(Some(val)) = system_properties::read("ro.build.type") {
-        return val == "user";
-    }
-    true
 }
 
 fn level_filter_from_property_or_info(property: &str) -> LevelFilter {

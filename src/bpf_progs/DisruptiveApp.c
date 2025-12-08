@@ -20,57 +20,8 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-
-struct pt_regs {
-  unsigned long regs[31];
-  unsigned long sp;
-  unsigned long pc;
-  unsigned long pr;
-  unsigned long sr;
-  unsigned long gbr;
-  unsigned long mach;
-  unsigned long macl;
-  long tra;
-};
-
-#define MAX_STRING_LENGTH 64
-
-struct BindServiceLocked {
-  char intent_action[MAX_STRING_LENGTH];
-  char intent_package[MAX_STRING_LENGTH];
-  char intent_component_name_package[MAX_STRING_LENGTH];
-  char intent_component_name_class[MAX_STRING_LENGTH];
-  long bind_flags;
-  char calling_package[MAX_STRING_LENGTH];
-};
-
-struct ComponentEnabledSetting {
-  char package_name[MAX_STRING_LENGTH];
-  char class_name[MAX_STRING_LENGTH];
-  int new_state;
-  char calling_package_name[MAX_STRING_LENGTH];
-};
-
-void recordString(void *jstring, unsigned int max_length, char *dest) {
-  // Assumes the following memory layout of a Java String object:
-  // byte offset 8-11: count (this is the length of the string * 2)
-  // byte offset 12-15: hash_code
-  // byte offset 16 and beyond: string content
-  __u32 count;
-  bpf_probe_read_user(&count, sizeof(count), jstring + 8);
-  count /= 2;
-  bpf_probe_read_user_str(dest, max_length < count + 1 ? max_length : count + 1,
-                          jstring + 16);
-}
-
-// Copies the content of a Java String object to <dest>, where the Java String
-// address is located in stack frame.
-void recordStringArgFromSp(struct pt_regs *ctx, unsigned int max_length,
-                           int sp_offset, char *dest) {
-  void *jstring = NULL;
-  bpf_probe_read_user(&jstring, 4, (void *)ctx->sp + sp_offset);
-  recordString(jstring, max_length, dest);
-}
+#include <uprobestats_bpf_fns.h>
+#include <uprobestats_bpf_structs.h>
 
 DEFINE_BPF_RINGBUF_EXT(BindServiceLocked_output_buf, struct BindServiceLocked,
                        4096, AID_UPROBESTATS, AID_UPROBESTATS, 0600, "", "",

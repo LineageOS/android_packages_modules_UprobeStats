@@ -18,25 +18,8 @@
 #include <linux/bpf.h>
 #include <stdbool.h>
 #include <stdint.h>
-
-// TODO: import this struct from generic header, access registers via generic
-// function
-struct pt_regs {
-  unsigned long regs[31];
-  unsigned long sp;
-  unsigned long pc;
-  unsigned long pr;
-  unsigned long sr;
-  unsigned long gbr;
-  unsigned long mach;
-  unsigned long macl;
-  long tra;
-};
-
-struct SetUidTempAllowlistStateRecord {
-  __u64 uid;
-  bool onAllowlist;
-};
+#include <uprobestats_bpf_fns.h>
+#include <uprobestats_bpf_structs.h>
 
 DEFINE_BPF_RINGBUF_EXT(output_buf, struct SetUidTempAllowlistStateRecord, 4096,
                        AID_UPROBESTATS, AID_UPROBESTATS, 0600, "", "", PRIVATE,
@@ -55,59 +38,11 @@ DEFINE_BPF_PROG("uprobe/set_uid_temp_allowlist_state", AID_UPROBESTATS,
   return 0;
 }
 
-struct jstring {
-  __u64 dummy;
-  __u32 count;
-  __u32 hash_code;
-};
-
-struct UpdateDeviceIdleTempAllowlistRecord {
-  int changing_uid;
-  bool adding;
-  long duration_ms;
-  int type;
-  int reason_code;
-  char reason[256];
-  int calling_uid;
-};
-
 DEFINE_BPF_RINGBUF_EXT(update_device_idle_temp_allowlist_records,
                        struct UpdateDeviceIdleTempAllowlistRecord, 4096,
                        AID_UPROBESTATS, AID_UPROBESTATS, 0600, "", "", PRIVATE,
                        BPFLOADER_MIN_VER, BPFLOADER_MAX_VER, LOAD_ON_ENG,
                        LOAD_ON_USER, LOAD_ON_USERDEBUG);
-
-// Copies the string content of a Java String object located at <jstring> to
-// <dest>.
-void recordString(void *jstring, unsigned int max_length, char *dest) {
-  // Assumes the following memory layout of a Java String object:
-  // byte offset 8-11: count (this is the length of the string * 2)
-  // byte offset 12-15: hash_code
-  // byte offset 16 and beyond: string content
-  __u32 count;
-  bpf_probe_read_user(&count, sizeof(count), (uint8_t *)jstring + 8);
-  count /= 2;
-  bpf_probe_read_user_str(dest, max_length < count + 1 ? max_length : count + 1,
-                          (uint8_t *)jstring + 16);
-}
-
-// Copies the content of a Java String object to <dest>, where the Java String
-// is located at <position> in the method invocation argument list (0-based).
-// This only works for the 0th - the 5th arguments. Rest of the arguments need
-// to be accessed via stack pointer using the recordStringArgFromSp() function.
-void recordStringArg(struct pt_regs *ctx, unsigned int max_length, int position,
-                     char *dest) {
-  recordString((void *)ctx->regs[2 + position], max_length, dest);
-}
-
-// Copies the content of a Java String object to <dest>, where the Java String
-// address is located in stack frame.
-void recordStringArgFromSp(struct pt_regs *ctx, unsigned int max_length,
-                           int sp_offset, char *dest) {
-  void *jstring = NULL;
-  bpf_probe_read_user(&jstring, 4, (void *)ctx->sp + sp_offset);
-  recordString(jstring, max_length, dest);
-}
 
 DEFINE_BPF_PROG("uprobe/update_device_idle_temp_allowlist", AID_UPROBESTATS,
                 AID_UPROBESTATS, BPF_KPROBE3)
@@ -138,12 +73,6 @@ DEFINE_BPF_PROG("uprobe/update_device_idle_temp_allowlist", AID_UPROBESTATS,
   return 0;
 }
 
-struct ProcessChange {
-  int pid;
-  int uid;
-  char process_name[256];
-};
-
 DEFINE_BPF_RINGBUF_EXT(process_change_output_buf, struct ProcessChange,
                        4096 * 16, AID_UPROBESTATS, AID_UPROBESTATS, 0600, "",
                        "", PRIVATE, BPFLOADER_MIN_VER, BPFLOADER_MAX_VER,
@@ -172,8 +101,8 @@ DEFINE_BPF_PROG("uprobe/make_active", AID_UPROBESTATS, AID_UPROBESTATS,
   if (output == NULL)
     return 1;
 
-  bpf_probe_read_user(&output->pid, 4, (void *)(ctx->regs[1] + 0xe8));
-  bpf_probe_read_user(&output->uid, 4, (void *)(ctx->regs[1] + 0xf4));
+  bpf_probe_read_user(&output->pid, 4, (void *)(ctx->regs[1] + 0xe4));
+  bpf_probe_read_user(&output->uid, 4, (void *)(ctx->regs[1] + 0xf0));
   uint8_t *process_name = 0;
   bpf_probe_read_user(&process_name, 4, (void *)(ctx->regs[1] + 0xa0));
   recordString(process_name, 256, output->process_name);
@@ -191,10 +120,10 @@ DEFINE_BPF_PROG("uprobe/on_process_active", AID_UPROBESTATS, AID_UPROBESTATS,
 
   uint8_t *process_record_ptr = 0;
   bpf_probe_read_user(&process_record_ptr, 4, (void *)(ctx->regs[1] + 0x8));
-  bpf_probe_read_user(&output->pid, 4, (void *)(process_record_ptr + 0xe8));
-  bpf_probe_read_user(&output->uid, 4, (void *)(process_record_ptr + 0xf4));
+  bpf_probe_read_user(&output->pid, 4, (void *)(process_record_ptr + 524));
+  bpf_probe_read_user(&output->uid, 4, (void *)(process_record_ptr + 532));
   uint8_t *process_name = 0;
-  bpf_probe_read_user(&process_name, 4, (void *)(process_record_ptr + 0xa0));
+  bpf_probe_read_user(&process_name, 4, (void *)(process_record_ptr + 52));
   recordString(process_name, 256, output->process_name);
 
   bpf_process_change_output_buf_submit(output);

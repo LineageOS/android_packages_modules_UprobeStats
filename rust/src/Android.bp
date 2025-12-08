@@ -4,6 +4,8 @@ rust_library {
     defaults: ["uprobestats_rust_defaults"],
     srcs: ["lib.rs"],
     rustlibs: [
+        "libactivity_manager_rs",
+        "libbinder_rs",
         "libdynamic_instrumentation_manager",
         "liblog_rust",
         "liblogger",
@@ -17,6 +19,7 @@ rust_library {
         "libstatssocket_rs",
         "libuprobestats_mainline_flags_rust",
         "libzerocopy",
+        "uprobestats-service-aidl-rust",
     ],
     shared_libs: ["libuprobestats_bpf_cc"],
 }
@@ -42,6 +45,7 @@ rust_binary {
         "libuprobestats_bpf_bindgen",
         "librustutils",
         "libuprobestats_mainline_flags_rust",
+        "libatrace_rust",
     ],
 }
 
@@ -51,6 +55,8 @@ rust_test {
     defaults: ["uprobestats_rust_defaults"],
     rustlibs: [
         "libuprobestats_rs",
+        "libactivity_manager_rs",
+        "libbinder_rs",
         "libdynamic_instrumentation_manager",
         "liblog_rust",
         "liblogger",
@@ -64,5 +70,6 @@ rust_test {
         "librustutils",
         "libserde_json",
         "libzerocopy",
+        "uprobestats-service-aidl-rust",
     ],
 }

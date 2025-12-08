@@ -23,6 +23,7 @@
 #include <android-base/scopeguard.h>
 #include <android-base/strings.h>
 #include <android/binder_process.h>
+#include <android/trace.h>
 #include <android_uprobestats_mainline_flags.h>
 #include <config.pb.h>
 #include <iostream>
@@ -198,6 +199,7 @@ void doPoll(PollArgs args) {
 }
 
 int main() {
+  ATrace_beginSection("uprobestats_cpp::main");
   if (android::uprobestats::flag_selector::executable_method_file_offsets()) {
     ABinderProcess_startThreadPool();
   }
@@ -293,6 +295,8 @@ int main() {
   }
 
   LOG_IF_DEBUG("done.");
+
+  ATrace_endSection();
 
   return 0;
 }

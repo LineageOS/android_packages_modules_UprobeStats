@@ -40,3 +40,25 @@ flag {
     bug: "400457896"
     is_fixed_read_only: true
 }
+
+flag {
+    name: "enable_bitmap_snapshot"
+    namespace: "system_performance"
+    description: "Whether to enable bitmap snapshot"
+    bug: "400457896"
+    is_fixed_read_only: true
+}
+
+flag {
+    name: "use_process_observer_api"
+    namespace: "system_performance"
+    description: "Whether to use the ProcessObserver API to monitor process start events."
+    bug: "408255571"
+}
+
+flag {
+    name: "enable_binder_transaction"
+    namespace: "responsible_apis"
+    description: "Whether to enable the binder transaction instrumentation"
+    bug: "427180586"
+}

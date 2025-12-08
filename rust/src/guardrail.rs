@@ -2,11 +2,13 @@
 use anyhow::{anyhow, bail, Result};
 use uprobestats_proto::config::{uprobestats_config::task::ProbeConfig, UprobestatsConfig};
 
-const ALLOWED_METHOD_PREFIXES: [&str; 4] = [
+const ALLOWED_METHOD_PREFIXES: [&str; 6] = [
     "com.android.server.am.ActivityManagerService$LocalService.updateDeviceIdleTempAllowlist",
     "com.android.server.am.CachedAppOptimizer",
     "com.android.server.am.OomAdjuster",
     "com.android.server.am.OomAdjusterModernImpl",
+    "com.android.server.pm.PackageManagerService$IPackageManagerImpl.setComponentEnabledSetting",
+    "com.android.server.am.ActiveServices.bindServiceLocked",
 ];
 
 /// Checks if the given config is allowed to be instrumented on user devices.
@@ -49,7 +51,7 @@ fn get_full_method_name(probe_config: &ProbeConfig, offsets_api_enabled: bool) -
             bail!("Fully qualified class name is empty")
         };
         let Some(ref method_name) = probe_config.method_name else { bail!("Method name is empty") };
-        Ok(format!("{}.{}", fqcn, method_name))
+        Ok(format!("{fqcn}.{method_name}"))
     } else {
         let Some(ref method_signature) = probe_config.method_signature else {
             bail!("Method signature is empty")

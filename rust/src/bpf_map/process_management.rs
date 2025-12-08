@@ -1,4 +1,4 @@
-use super::{bytes_as_str, OnItem};
+use super::{bytes_as_str, Handler};
 use crate::config_resolver::ResolvedTask;
 use anyhow::{anyhow, Result};
 use log::debug;
@@ -8,12 +8,20 @@ use uprobestats_bpf_bindgen::{
     SetUidTempAllowlistStateRecord, UpdateDeviceIdleTempAllowlistRecord,
 };
 
+#[derive(Default)]
+pub struct SetUidTempAllowlistStateRecordHandler {}
+
 // SAFETY: `SetUidTempAllowlistStateRecord` is a struct defined in the given `MAP_PATH`, and is guaranteed to match the
 // layout of the corresponding C struct.
-unsafe impl OnItem for SetUidTempAllowlistStateRecord {
+unsafe impl Handler for SetUidTempAllowlistStateRecordHandler {
     const MAP_PATH: &'static str = "/sys/fs/bpf/uprobestats/map_ProcessManagement_output_buf";
-    fn on_item(&self, task: &ResolvedTask) -> Result<()> {
-        debug!("SetUidTempAllowlistStateRecord: {:?}", self);
+    type T = SetUidTempAllowlistStateRecord;
+    fn on_item(
+        &mut self,
+        task: &ResolvedTask,
+        data: &SetUidTempAllowlistStateRecord,
+    ) -> Result<()> {
+        debug!("SetUidTempAllowlistStateRecord: {data:?}");
 
         let MessageField(Some(ref statsd_logging_config)) = task.task.statsd_logging_config else {
             return Ok(());
@@ -24,26 +32,34 @@ unsafe impl OnItem for SetUidTempAllowlistStateRecord {
             .atom_id
             .ok_or(anyhow!("atom_id required if statsd_logging_config provided"))?;
 
-        debug!("attempting to write atom id: {}", atom_id);
+        debug!("attempting to write atom id: {atom_id}");
         let mut event = AStatsEvent::new(atom_id.try_into()?);
 
-        event.write_int32(self.uid.try_into()?);
-        event.write_bool(self.onAllowlist);
+        event.write_int32(data.uid.try_into()?);
+        event.write_bool(data.onAllowlist);
 
         event.write();
-        debug!("successfully wrote atom id: {}", atom_id);
+        debug!("successfully wrote atom id: {atom_id}");
 
         Ok(())
     }
 }
 
+#[derive(Default)]
+pub struct UpdateDeviceIdleTempAllowlistRecordHandler {}
+
 // SAFETY: `UpdateDeviceIdleTempAllowlistRecord` is a struct defined in the given `MAP_PATH`, and is guaranteed to match the
 // layout of the corresponding C struct.
-unsafe impl OnItem for UpdateDeviceIdleTempAllowlistRecord {
+unsafe impl Handler for UpdateDeviceIdleTempAllowlistRecordHandler {
     const MAP_PATH: &'static str =
         "/sys/fs/bpf/uprobestats/map_ProcessManagement_update_device_idle_temp_allowlist_records";
-    fn on_item(&self, task: &ResolvedTask) -> Result<()> {
-        debug!("UpdateDeviceIdleTempAllowlistRecord: {:?}", self);
+    type T = UpdateDeviceIdleTempAllowlistRecord;
+    fn on_item(
+        &mut self,
+        task: &ResolvedTask,
+        data: &UpdateDeviceIdleTempAllowlistRecord,
+    ) -> Result<()> {
+        debug!("UpdateDeviceIdleTempAllowlistRecord: {data:?}");
 
         let MessageField(Some(ref statsd_logging_config)) = task.task.statsd_logging_config else {
             return Ok(());
@@ -54,19 +70,19 @@ unsafe impl OnItem for UpdateDeviceIdleTempAllowlistRecord {
             .atom_id
             .ok_or(anyhow!("atom_id required if statsd_logging_config provided"))?;
 
-        debug!("attempting to write atom id: {}", atom_id);
+        debug!("attempting to write atom id: {atom_id}");
         let mut event = AStatsEvent::new(atom_id.try_into()?);
 
-        event.write_int32(self.changing_uid);
-        event.write_bool(self.adding);
-        event.write_int64(self.duration_ms as _);
-        event.write_int32(self.type_);
-        event.write_int32(self.reason_code);
-        event.write_string(bytes_as_str(&self.reason)?)?;
-        event.write_int32(self.calling_uid);
+        event.write_int32(data.changing_uid);
+        event.write_bool(data.adding);
+        event.write_int64(data.duration_ms as _);
+        event.write_int32(data.type_);
+        event.write_int32(data.reason_code);
+        event.write_string(bytes_as_str(&data.reason)?)?;
+        event.write_int32(data.calling_uid);
 
         event.write();
-        debug!("successfully wrote atom id: {}", atom_id);
+        debug!("successfully wrote atom id: {atom_id}");
 
         Ok(())
     }

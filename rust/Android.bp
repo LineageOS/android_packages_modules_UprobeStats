@@ -5,7 +5,10 @@ package {
 
 rust_defaults {
     name: "uprobestats_rust_defaults",
-    rustlibs: ["libanyhow"],
+    rustlibs: [
+        "libanyhow",
+        "librand",
+    ],
     apex_available: [
         "//apex_available:platform",
         "com.android.uprobestats",

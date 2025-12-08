@@ -20,30 +20,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-
-// TODO: import this struct from generic header, access registers via generic
-// function
-struct pt_regs {
-  unsigned long regs[16];
-  unsigned long pc;
-  unsigned long pr;
-  unsigned long sr;
-  unsigned long gbr;
-  unsigned long mach;
-  unsigned long macl;
-  long tra;
-};
-
-// TODO: share this struct between bpf and uprobestats
-struct CallResult {
-  unsigned long pc;
-  unsigned long regs[10];
-};
-
-struct CallTimestamp {
-  unsigned int event;
-  unsigned long timestampNs;
-};
+#include <uprobestats_bpf_structs.h>
 
 DEFINE_BPF_RINGBUF_EXT(call_detail_buf, struct CallResult, 4096,
                        AID_UPROBESTATS, AID_UPROBESTATS, 0600, "", "", PRIVATE,
@@ -57,7 +34,7 @@ DEFINE_BPF_RINGBUF_EXT(call_timestamp_buf, struct CallTimestamp, 4096,
 
 DEFINE_BPF_PROG("uprobe/call_detail", AID_UPROBESTATS, AID_UPROBESTATS,
                 BPF_KPROBE11)
-(struct pt_regs *ctx) {
+(struct pt_regs_x86_supported *ctx) {
   struct CallResult result;
   // for whatever reason, reading past register 10 causes bpf verifier to fail
   for (int i = 0; i < 11; i++) {

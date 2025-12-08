@@ -3,7 +3,7 @@
 
 tasks {
     probe_configs: {
-        bpf_name: "prog_BitmapAllocation_uprobe_bitmap_creation"
+        bpf_name: "prog_BitmapAllocation_uprobe_bitmap_creation_for_snapshot"
         file_paths: "/system/framework/framework.jar"
         fully_qualified_class_name: "android.graphics.Bitmap"
         method_name: "<init>"

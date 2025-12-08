@@ -17,6 +17,8 @@ android_test_helper_app {
 
     srcs: ["**/*.java"],
 
+    manifest: "AndroidManifest.xml",
+    resource_dirs: ["res"],
     min_sdk_version: "36",
     platform_apis: true,
     certificate: "platform",

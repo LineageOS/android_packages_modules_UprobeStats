@@ -1,39 +1,111 @@
 //! Utils for dealing with processes
 use crate::{bpf_map::bytes_as_str, prefix_bpf, Timer};
-use anyhow::{anyhow, bail, Result};
+use activity_manager::{ProcessObserver, ProcessObserverCallbacks};
+use anyhow::{anyhow, bail, Context, Result};
 use dynamic_instrumentation_manager::{
     ExecutableMethodFileOffsets, MethodDescriptor, TargetProcess,
 };
 use log::debug;
 use std::fs::{read, read_dir};
+use std::sync::mpsc;
 use std::time::Duration;
 use uprobestats_bpf::{bpf_perf_event_open, poll_ring_buf};
 use uprobestats_bpf_bindgen::ProcessChange;
+use uprobestats_mainline_flags_rust as uprobestats_flags;
 use uprobestats_proto::config::uprobestats_config::task::TargetProcessSelection;
 
-pub(crate) fn get_pid_and_uid(
-    target_process_name: &str,
+pub(crate) struct ResolvedProcess {
+    pub(crate) pid: i32,
+    pub(crate) uid: i32,
+    pub(crate) name: String,
+}
+
+pub(crate) fn resolve_process(
+    target_process_name: Option<&str>, // Make process name optional
     target_process_selection: TargetProcessSelection,
     duration: Duration,
-) -> Result<(i32, i32)> {
+) -> Result<ResolvedProcess> {
     debug!(
-        "get_pid_and_uid: process_name: {} process_selection: {:?}",
-        target_process_name, target_process_selection
+        "resolve_process: process_name: {target_process_name:?} process_selection: {target_process_selection:?}"
     );
     match target_process_selection {
         TargetProcessSelection::SPECIFIC_APP_PROCESS_ON_START => {
-            wait_for_app_start(Some(target_process_name), duration)
+            wait_for_app_start(target_process_name, duration)
         }
         TargetProcessSelection::ANY_APP_PROCESS_ON_START => wait_for_app_start(None, duration),
         TargetProcessSelection::SPECIFIC_PROCESS_NAME | TargetProcessSelection::UNKNOWN => {
-            let pid = get_pid(target_process_name)
-                .ok_or(anyhow!("Can't find pid for {}", target_process_name))?;
-            Ok((pid, 0))
+            let process_name = target_process_name.ok_or(anyhow!(
+                "Process name is required for selection type {:?}",
+                target_process_selection
+            ))?;
+            let pid =
+                get_pid(process_name).ok_or(anyhow!("Can't find pid for {}", process_name))?;
+            Ok(ResolvedProcess { pid, uid: 0, name: process_name.to_string() })
         }
     }
 }
 
-fn wait_for_app_start(process_name: Option<&str>, duration: Duration) -> Result<(i32, i32)> {
+fn wait_for_app_start(process_name: Option<&str>, duration: Duration) -> Result<ResolvedProcess> {
+    if uprobestats_flags::use_process_observer_api() {
+        wait_for_app_start_observer(process_name, duration)
+    } else {
+        wait_for_app_start_uprobe(process_name, duration)
+    }
+}
+
+struct AppStartObserver {
+    sender: mpsc::Sender<ResolvedProcess>,
+    target_process_name: Option<String>,
+}
+
+impl ProcessObserverCallbacks for AppStartObserver {
+    fn on_process_started(
+        &mut self,
+        pid: i32,
+        process_uid: u32,
+        _package_uid: u32,
+        _package_name: &str,
+        process_name: &str,
+    ) {
+        debug!(
+            "Process started via observer: pid={}, uid={}, name={}",
+            pid, process_uid, process_name
+        );
+        if let Some(target_name) = &self.target_process_name {
+            if target_name != process_name {
+                return;
+            }
+        }
+
+        let resolved =
+            ResolvedProcess { pid, uid: process_uid as i32, name: process_name.to_string() };
+
+        if self.sender.send(resolved).is_err() {
+            debug!("Receiver dropped, could not send process start event.");
+        }
+    }
+}
+
+fn wait_for_app_start_observer(
+    process_name: Option<&str>,
+    duration: Duration,
+) -> Result<ResolvedProcess> {
+    let (sender, receiver) = mpsc::channel();
+
+    let observer_callbacks =
+        AppStartObserver { sender, target_process_name: process_name.map(String::from) };
+
+    // The observer is automatically unregistered when `_observer` is dropped.
+    let _observer = ProcessObserver::register(Box::new(observer_callbacks))?;
+    debug!("Registered process observer. Waiting for app start...");
+
+    receiver.recv_timeout(duration).map_err(|e| anyhow!("Timeout waiting for process start: {}", e))
+}
+
+fn wait_for_app_start_uprobe(
+    process_name: Option<&str>,
+    duration: Duration,
+) -> Result<ResolvedProcess> {
     let system_server_pid =
         get_pid("system_server").ok_or(anyhow!("failed to get system server pid"))?;
     let (offsets, bpf_prog_name) = match get_ProcessRecord_makeActive_offsets() {
@@ -72,7 +144,11 @@ fn wait_for_app_start(process_name: Option<&str>, duration: Duration) -> Result<
                     "detected process start: pid: {} uid: {}",
                     process_change.pid, process_change.uid
                 );
-                return Ok((process_change.pid, process_change.uid));
+                return Ok(ResolvedProcess {
+                    pid: process_change.pid,
+                    uid: process_change.uid,
+                    name: result_process_name.to_string(),
+                });
             }
         }
     }
@@ -112,7 +188,8 @@ fn get_ProcessRecord_makeActive_offsets() -> Result<ExecutableMethodFileOffsets>
             METHOD_MAKE_ACTIVE,
             METHOD_MAKE_ACTIVE_PARAMS.into_iter().map(String::from),
         )?,
-    )?;
+    )
+    .context("Failed to get offsets for ProcessRecord#makeActive")?;
     offsets.ok_or(anyhow!("Could not find offsets for ProcessRecord#makeActive"))
 }
 
@@ -125,7 +202,8 @@ fn get_onProcessActive_offsets() -> Result<ExecutableMethodFileOffsets> {
             METHOD_ON_PROCESS_ACTIVE,
             METHOD_ON_PROCESS_ACTIVE_PARAMS.into_iter().map(String::from),
         )?,
-    )?;
+    )
+    .context("Failed to get offsets for ProcessProfileRecord#onProcessActive")?;
     offsets.ok_or(anyhow!("Could not find offsets for ProcessProfileRecord#onProcessActive"))
 }
 

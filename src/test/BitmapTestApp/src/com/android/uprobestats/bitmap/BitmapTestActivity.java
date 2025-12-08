@@ -18,13 +18,39 @@ package com.android.uprobestats.bitmap;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.graphics.BitmapFactory;
 
 public class BitmapTestActivity extends Activity {
     private static final String TAG = BitmapTestActivity.class.getSimpleName();
+    android.graphics.Bitmap longLivedBitmap;
 
     @Override
-    public void onCreate(Bundle bundle) {
-        super.onCreate(bundle);
-        android.graphics.Bitmap.createBitmap(100, 100, android.graphics.Bitmap.Config.ARGB_8888);
+    protected void onStart() {
+        super.onStart();
+        android.graphics.Bitmap.createBitmap(100, 100,
+                android.graphics.Bitmap.Config.ARGB_8888);
+        BitmapFactory.Options options = new BitmapFactory.Options();
+        options.inScaled = false; // Disable scaling
+        longLivedBitmap =
+                android.graphics.BitmapFactory.decodeResource(
+                        getResources(), R.drawable.icon1, options);
+
+        Runnable myTask =
+                () -> {
+                    android.graphics.Bitmap png2 =
+                            android.graphics.BitmapFactory.decodeResource(
+                                    getResources(), R.drawable.icon1, options);
+                    png2 = null;
+                };
+
+        // Create and start the thread
+        Thread myThread = new Thread(myTask);
+        myThread.start();
+
+        // Optionally, wait for the thread to finish
+        try {
+            myThread.join(); // Wait for myThread to terminate
+        } catch (InterruptedException e) {
+        }
     }
 }

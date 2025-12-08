@@ -6,6 +6,8 @@
 
 #include "bpf_map_def.h"
 
+#pragma once
+
 /******************************************************************************
  * WARNING: CHANGES TO THIS FILE OUTSIDE OF AOSP/MAIN ARE LIKELY TO BREAK     *
  * DEVICE COMPATIBILITY WITH MAINLINE MODULES SHIPPING EBPF CODE.             *

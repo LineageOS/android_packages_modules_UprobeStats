@@ -14,71 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef __UPROBESTATSBPF_H__
-#define __UPROBESTATSBPF_H__
+#pragma once
 
 #include <sys/types.h>
 
 __BEGIN_DECLS
 
-struct CallTimestamp {
-  unsigned int event;
-  unsigned long timestampNs;
-};
-
-struct CallResult {
-  unsigned long pc;
-  unsigned long regs[10];
-};
-
-struct SetUidTempAllowlistStateRecord {
-  __u64 uid;
-  bool onAllowlist;
-};
-
-struct UpdateDeviceIdleTempAllowlistRecord {
-  int changing_uid;
-  bool adding;
-  long duration_ms;
-  int type;
-  int reason_code;
-  char reason[256];
-  int calling_uid;
-};
-
-struct BindServiceLocked {
-  char intent_action[64];
-  char intent_package[64];
-  char intent_component_name_package[64];
-  char intent_component_name_class[64];
-  long bind_flags;
-  char calling_package[64];
-};
-
-struct ComponentEnabledSetting {
-  char package_name[64];
-  char class_name[64];
-  int new_state;
-  char calling_package_name[64];
-};
-
-struct ProcessChange {
-  int pid;
-  int uid;
-  char process_name[256];
-};
-
-struct BitmapAllocation {
-  __u32 width;
-  __u32 height;
-  __u32 pixel_storage_type;
-};
+typedef struct BpfMapHandle BpfMapHandle;
 
 int pollRingBuf(const char *mapPath, int timeoutMs, size_t valueSize,
                 void (*callback)(const void *, void *), void *cookie);
 int bpfPerfEventOpen(const char *filename, int offset, int pid,
                      const char *bpfProgramPath);
 
-__END_DECLS
+int bpfMapOpenExclusiveRW(const char *path, BpfMapHandle **handle_out);
+void bpfMapClose(BpfMapHandle *handle);
+int bpfMapUpdateElem(BpfMapHandle *handle, const void *key, const void *value,
+                     uint64_t flags);
+int bpfMapLookupElem(BpfMapHandle *handle, const void *key, void *value);
+int bpfMapDeleteElem(BpfMapHandle *handle, const void *key);
+int bpfMapGetFirstKey(BpfMapHandle *handle, void *firstKey);
 
-#endif  // __UPROBESTATSBPF_H__
+__END_DECLS
